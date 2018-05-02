@@ -2,19 +2,17 @@
 
 using namespace std;
 
-TSharedPtr<FOpenCVSmileImpl, ESPMode::NotThreadSafe> FOpenCVSmileImpl::OpenCVSmileImplPtr;
-TSharedRef<class FOpenCVSmileImpl, ESPMode::NotThreadSafe> FOpenCVSmileImpl::Get(FString CascadeName, FString NestedCascadeName)
+FOpenCVSmileImpl* FOpenCVSmileImpl::OpenCVSmileImplPtr = nullptr;
+FOpenCVSmileImpl* FOpenCVSmileImpl::Get(FString CascadeName, FString NestedCascadeName)
 {
-	if (!OpenCVSmileImplPtr.IsValid())
+	if (OpenCVSmileImplPtr == nullptr)
 	{
 		std::string cascadeName = std::string(TCHAR_TO_UTF8(*CascadeName));
 		std::string nestedCascadeName = std::string(TCHAR_TO_UTF8(*NestedCascadeName));
-		OpenCVSmileImplPtr = TSharedPtr<class FOpenCVSmileImpl, ESPMode::NotThreadSafe > (new FOpenCVSmileImpl(cascadeName, nestedCascadeName));
-
-		check(OpenCVSmileImplPtr.IsValid());
+		OpenCVSmileImplPtr = new FOpenCVSmileImpl(cascadeName, nestedCascadeName);
 	}
 
-	return OpenCVSmileImplPtr.ToSharedRef();
+	return OpenCVSmileImplPtr;
 }
 
 FOpenCVSmileImpl::FOpenCVSmileImpl(std::string CascadeName, std::string NestedCascadeName)
@@ -26,36 +24,29 @@ FOpenCVSmileImpl::FOpenCVSmileImpl(std::string CascadeName, std::string NestedCa
 	this->bIsSmileThreadRunning = false;
 }
 
-FOpenCVSmileImpl::~FOpenCVSmileImpl()
-{
-	UE_LOG(LogTemp, Warning, TEXT("FOpenCVSmileImpl::~FOpenCVSmileImpl()"));
-	StopCameraInst();
-}
+// Let program destroy object after exit
+//FOpenCVSmileImpl::~FOpenCVSmileImpl()
+//{
+//	UE_LOG(LogTemp, Warning, TEXT("FOpenCVSmileImpl::~FOpenCVSmileImpl()"));
+//
+//	frame.release();
+//	image.release();
+//
+//	faces.clear();
+//	faces2.clear();
+//	nestedObjects.clear();
+//
+//	gray.release();
+//	smallImg.release();
+//}
 
-void FOpenCVSmileImpl::DetectSmile(cv::Mat& img, cv::CascadeClassifier& cascade, cv::CascadeClassifier& nestedCascade, double scale, bool tryflip)
+
+void FOpenCVSmileImpl::DetectSmile(cv::Mat& img, cv::CascadeClassifier& cascade, cv::CascadeClassifier& nestedCascade)
 {
-	static vector<cv::Rect> faces, faces2;
-	const static cv::Scalar colors[] =
-	{
-		cv::Scalar(255,0,0),
-		cv::Scalar(255,128,0),
-		cv::Scalar(255,255,0),
-		cv::Scalar(0,255,0),
-		cv::Scalar(0,128,255),
-		cv::Scalar(0,255,255),
-		cv::Scalar(0,0,255),
-		cv::Scalar(255,0,255)
-	};
-	cv::Mat gray, smallImg;
 	cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
-
-	double fx = 1 / scale;
 	cv::resize(gray, smallImg, cv::Size(), fx, fx, cv::INTER_LINEAR_EXACT);
 	cv::equalizeHist(smallImg, smallImg);
 
-
-	const static int FaceMinNeighbors = 30; // For tracking only one object make maighors factor bigger
-	const static float FaceScaleFactor = 1.05f; // – Parameter specifying how much the image size is reduced at each image scale.
 	cascade.detectMultiScale(smallImg, faces,
 		FaceScaleFactor, FaceMinNeighbors, 0
 		//|CASCADE_FIND_BIGGEST_OBJECT
@@ -63,26 +54,10 @@ void FOpenCVSmileImpl::DetectSmile(cv::Mat& img, cv::CascadeClassifier& cascade,
 		| cv::CASCADE_SCALE_IMAGE,
 		cv::Size(30, 30));
 
-	//if (tryflip)
-	//{
-	//	cv::flip(smallImg, smallImg, 1);
-	//	cascade.detectMultiScale(smallImg, faces2,
-	//		1.1, 2, 0
-	//		//|CASCADE_FIND_BIGGEST_OBJECT
-	//		//|CASCADE_DO_ROUGH_SEARCH
-	//		| cv::CASCADE_SCALE_IMAGE,
-	//		cv::Size(30, 30));
-	//	for (vector<cv::Rect>::const_iterator r = faces2.begin(); r != faces2.end(); ++r)
-	//	{
-	//		faces.push_back(cv::Rect(smallImg.cols - r->x - r->width, r->y, r->width, r->height));
-	//	}
-	//}
-
 	for (size_t i = 0; i < faces.size(); i++)
 	{
 		cv::Rect r = faces[i];
 		cv::Mat smallImgROI;
-		static vector<cv::Rect> nestedObjects;
 		cv::Point center;
 		cv::Scalar color = colors[i % 8];
 		int radius;
@@ -105,11 +80,7 @@ void FOpenCVSmileImpl::DetectSmile(cv::Mat& img, cv::CascadeClassifier& cascade,
 		r.height = half_height - 1;
 		smallImgROI = smallImg(r);
 
-		const static int SimleMinNeighbors = 0; // Should be 0
 
-												// – Parameter specifying how much the image size is reduced at each image scale.
-												// - If it bigger it goig to track on longet distance
-		const static float SmileScaleFactor = 5.0f;
 		nestedCascade.detectMultiScale(smallImgROI, nestedObjects,
 			SmileScaleFactor, SimleMinNeighbors, 0
 			//|CASCADE_FIND_BIGGEST_OBJECT
@@ -122,8 +93,7 @@ void FOpenCVSmileImpl::DetectSmile(cv::Mat& img, cv::CascadeClassifier& cascade,
 		// following steps use a floating minimum and maximum of neighbors. Intensity thus estimated will be
 		//accurate only after a first smile has been displayed by the user.
 		const int smile_neighbors = (int)nestedObjects.size();
-		static int max_neighbors = -1;
-		static int min_neighbors = -1;
+
 		if (min_neighbors == -1) min_neighbors = smile_neighbors;
 		max_neighbors = MAX(max_neighbors, smile_neighbors);
 
@@ -149,38 +119,28 @@ void FOpenCVSmileImpl::DetectSmile(cv::Mat& img, cv::CascadeClassifier& cascade,
 
 void FOpenCVSmileImpl::RunCameraThread()
 {
-	UE_LOG(LogTemp, Warning, TEXT("RunCameraThread() start"));
-
-	string inputName;
-	bool tryflip = false;
-
-	double scale = 1.0;
-
 	if (!cascade.load(CascadeName))
 	{
-		cerr << "ERROR: Could not load face cascade" << endl;
 		check(false);
 	}
 	if (!nestedCascade.load(NestedCascadeName))
 	{
-		cerr << "ERROR: Could not load smile cascade" << endl;
 		check(false);
 	}
 
 	// Open 0 camera
 	if (!capture.open(0))
 	{
-		cout << "Capture from camera #" << 0 << " didn't work" << endl;
 		check(false);
 	}
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+	// Limit frame rate
+	capture.set(CV_CAP_PROP_FPS, 5);
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
 	if (capture.isOpened())
 	{
-		cout << "Video capturing has been started ..." << endl;
-		cout << endl << "NOTE: Smile intensity will only be valid after a first smile has been detected" << endl;
-
 		while (bIsSmileThreadRunning == true)
 		{
 			capture >> frame;
@@ -189,28 +149,22 @@ void FOpenCVSmileImpl::RunCameraThread()
 				UE_LOG(LogTemp, Warning, TEXT("frame.empty()"));
 				continue;
 			}
-			//cv::Mat frame1 = frame.clone();
-
-			DetectSmile(frame, cascade, nestedCascade, scale, tryflip);
+			cv::Mat frame1 = frame.clone();
+			DetectSmile(frame1, cascade, nestedCascade);
 		}
 	}
 	else
 	{
-		cerr << "ERROR: Could not initiate capture" << endl;
 		check(false);
 	}
 
 
 	capture.release();
 	cv::destroyAllWindows();
-
-	UE_LOG(LogTemp, Warning, TEXT("End RunCameraThread function"));
 }
 
 void FOpenCVSmileImpl::StartCameraInst()
-{
-	UE_LOG(LogTemp, Warning, TEXT("StartCameraInst"));
-	
+{	
 	if (bIsSmileThreadRunning == false) {
 		bIsSmileThreadRunning = true;
 		CameraThread = std::thread([this]() { RunCameraThread(); });
@@ -222,12 +176,5 @@ void FOpenCVSmileImpl::StopCameraInst()
 	if (bIsSmileThreadRunning) {
 		bIsSmileThreadRunning = false;
 		CameraThread.join();
-	}
-
-	if (OpenCVSmileImplPtr.IsValid())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("FOpenCVSmileImpl::StopCameraInst() OpenCVSmileImplPtr.Reset()"));
-		OpenCVSmileImplPtr.Reset();
-		OpenCVSmileImplPtr = nullptr;
 	}
 }

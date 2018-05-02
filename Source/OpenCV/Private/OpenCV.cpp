@@ -4,15 +4,9 @@
 #include "Misc/Paths.h"
 #include "HAL/PlatformProcess.h"
 
-#include <iostream>
-
-#include "opencv2/objdetect.hpp"
-#include "opencv2/highgui.hpp"
-#include "opencv2/imgproc.hpp"
+#include "Components/Smile/OpenCVSmileImpl.h"
 
 #define LOCTEXT_NAMESPACE "FOpenCV"
-
-using namespace std;
 
 void FOpenCV::StartupModule()
 {
@@ -94,6 +88,9 @@ void FOpenCV::ShutdownModule()
 		FPlatformProcess::FreeDllHandle(Val.Value);
 		Val.Value = nullptr;
 	}
+
+	// release smile implementation
+	FOpenCVSmileImpl::Destroy();
 }
 
 #undef LOCTEXT_NAMESPACE
