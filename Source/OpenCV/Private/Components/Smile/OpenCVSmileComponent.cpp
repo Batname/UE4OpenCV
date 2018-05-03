@@ -7,23 +7,21 @@ UOpenCVSmileComponent::UOpenCVSmileComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	bWantsInitializeComponent = true;
-
+	bUseGPU = true;
 }
 
 
 // Called when the game starts
 void UOpenCVSmileComponent::BeginPlay()
 {
-	Super::BeginPlay();	
+	Super::BeginPlay();
+
+	FOpenCVSmileImpl::UpdateParams(bUseGPU);
 }
 
 void UOpenCVSmileComponent::InitializeComponent()
 {
-	FOpenCVSmileImpl::Get(CascadeName, NestedCascadeName);
-
-	//IOpenCV::Get().OpenCVSmileImpl->Init(cascadeName, nestedCascadeName);
-	//UE_LOG(LogTemp, Warning, TEXT("UOpenCVSmileComponent::InitializeComponent()"));
-
+	FOpenCVSmileImpl::Get(CascadeName, NestedCascadeName, CascadeGPUName, NestedCascadeGPUName, bUseGPU);
 }
 
 
@@ -32,7 +30,7 @@ void UOpenCVSmileComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	auto OpenCVSmileImpl = FOpenCVSmileImpl::Get(CascadeName, NestedCascadeName);
+	auto OpenCVSmileImpl = FOpenCVSmileImpl::Get(CascadeName, NestedCascadeName, CascadeGPUName, NestedCascadeGPUName, bUseGPU);
 	OpenCVSmileFrame = OpenCVSmileImpl->GetOpenCVSmileFrame();
 }
 

@@ -7,6 +7,11 @@
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgproc.hpp"
 
+// Gpu version
+#include "opencv2/cudaobjdetect.hpp"
+#include "opencv2/cudaimgproc.hpp"
+#include "opencv2/cudawarping.hpp"
+
 #include "OpenCVSmileImpl.generated.h"
 
 USTRUCT(BlueprintType)
@@ -27,12 +32,12 @@ class FOpenCVSmileImpl
 {
 public:
 
-	FOpenCVSmileImpl(std::string CascadeName, std::string NestedCascadeName);
+	FOpenCVSmileImpl(std::string CascadeName, std::string NestedCascadeName, std::string CascadeGpuName, std::string NestedCascadeGpuName, bool useGPU);
 	FOpenCVSmileImpl(FOpenCVSmileImpl &&) {}
 	FOpenCVSmileImpl(const FOpenCVSmileImpl&) = default;
 	//~FOpenCVSmileImpl();
 
-	static FOpenCVSmileImpl* Get(FString CascadeName, FString NestedCascadeName);
+	static FOpenCVSmileImpl* Get(FString CascadeName, FString NestedCascadeName, FString CascadeGpuName, FString NestedCascadeGpuName, bool useGPU);
 	static FOpenCVSmileImpl* OpenCVSmileImplPtr;
 
 public:
@@ -49,6 +54,14 @@ public:
 		if (OpenCVSmileImplPtr != nullptr)
 		{
 			OpenCVSmileImplPtr->StopCameraInst();
+		}
+	}
+
+	static void UpdateParams(bool useGPU)
+	{
+		if (OpenCVSmileImplPtr != nullptr)
+		{
+			OpenCVSmileImplPtr->useGPU = useGPU;
 		}
 	}
 
@@ -75,20 +88,17 @@ private:
 
 	FOpenCVSmileFrame OpenCVSmileFrame;
 
-	std::string CascadeName;
-	std::string NestedCascadeName;
-
 private:
 	void RunCameraThread();
-	void DetectSmile(cv::Mat& img, cv::CascadeClassifier& cascade, cv::CascadeClassifier& nestedCascade);
+	void DetectSmile();
+	void Relese();
 
+// Webcam
 private:
 	cv::VideoCapture capture;
-	cv::Mat frame, image;
-	cv::CascadeClassifier cascade, nestedCascade;
 
-	std::vector<cv::Rect> faces, faces2;
-	std::vector<cv::Rect> nestedObjects;
+// General
+private:
 	cv::Scalar colors[8] =
 	{
 		cv::Scalar(255,0,0),
@@ -100,14 +110,35 @@ private:
 		cv::Scalar(0,0,255),
 		cv::Scalar(255,0,255)
 	};
-	cv::Mat gray, smallImg;
-	double fx = 1;
-	double scale = 1;
-	int FaceMinNeighbors = 30; // For tracking only one object make maighors factor bigger
-	float FaceScaleFactor = 1.05f; // – Parameter specifying how much the image size is reduced at each image scale.
-	int SimleMinNeighbors = 0;
-	float SmileScaleFactor = 5.0f;
 
+// Detection
+private:
 	int max_neighbors = -1;
 	int min_neighbors = -1;
+
+// Objects buffer
+private:
+	std::vector<cv::Rect> faces, faces2;
+	std::vector<cv::Rect> nestedObjects;
+
+// CPU version
+private:
+	cv::Mat smallImgROI;
+	cv::CascadeClassifier cascade, nestedCascade;
+	cv::Mat frame, frame_cpu, gray_cpu, resized_cpu, frameDisp;
+
+	std::string CascadeName;
+	std::string NestedCascadeName;
+
+// GPU version
+private:
+	bool useGPU;
+
+	cv::Ptr<cv::cuda::CascadeClassifier> cascade_gpu;
+	cv::Ptr<cv::cuda::CascadeClassifier> nestedCascade_gpu;
+
+	cv::cuda::GpuMat frame_gpu, smallImgROIGPU, gray_gpu, resized_gpu, facesBuf_gpu, faces1Buf_gpu;
+
+	std::string CascadeGpuName;
+	std::string NestedCascadeGpuName;
 };

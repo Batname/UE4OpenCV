@@ -45,6 +45,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "OpenCVSmileComponent")
 	FString NestedCascadeName;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "OpenCVSmileComponent")
+	FString CascadeGPUName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "OpenCVSmileComponent")
+	FString NestedCascadeGPUName;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "OpenCVSmileComponent")
+	bool bUseGPU;
+
 	UPROPERTY(BlueprintReadOnly, Category = "OpenCVSmileComponent")
 	FOpenCVSmileFrame OpenCVSmileFrame;
 
