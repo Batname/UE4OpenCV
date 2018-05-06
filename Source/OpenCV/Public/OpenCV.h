@@ -3,8 +3,6 @@
 #pragma once
 
 #include "IOpenCV.h"
-#include <future>
-
 
 class FOpenCV : public IOpenCV
 {
